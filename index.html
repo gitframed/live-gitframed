@@ -1,0 +1,160 @@
+
+<html>
+<head>
+  <script type="text/javascript" src="script.js"></script>
+  <script type="text/javascript" src="https://unpkg.com/@isomorphic-git/lightning-fs"></script>
+  <script  type= "text/javascript" src="https://unpkg.com/isomorphic-git@beta"></script>
+  <script src="https://cdn.anychart.com/releases/8.10.0/js/anychart-core.min.js"></script>
+  <script src="https://cdn.anychart.com/releases/8.10.0/js/anychart-graph.min.js"></script>
+  <script src="https://cdn.anychart.com/releases/v8/js/anychart-base.min.js"></script>
+  <script src="https://cdn.anychart.com/releases/v8/js/anychart-graph.min.js"></script>
+  <script src="https://cdn.anychart.com/releases/v8/js/anychart-data-adapter.min.js"></script>
+  <script src="https://cdn.anychart.com/releases/v8/js/anychart-ui.min.js"></script>
+  <script src="https://cdn.anychart.com/releases/v8/js/anychart-exports.min.js"></script>
+  <link href="https://cdn.anychart.com/releases/v8/css/anychart-ui.min.css" type="text/css" rel="stylesheet">
+  <link href="https://cdn.anychart.com/releases/v8/fonts/css/anychart-font.min.css" type="text/css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+
+<script   type="module">
+  import http from 'https://unpkg.com/isomorphic-git@beta/http/web/index.js'
+
+  window.fs = new LightningFS('fs', { wipe: true })  // I prefer using the Promisified version honestly
+  window.pfs = window.fs.promises
+  window.dir = '/tmp'
+async function f(repo){
+  await pfs.mkdir(dir);
+  // Behold - it is empty!
+  await pfs.readdir(dir);
+  try{
+    await git.clone({
+    fs,
+    http,
+    dir,
+    corsProxy: 'https://cors.isomorphic-git.org',
+    url: repo,
+    ref: 'master',
+    singleBranch: true,
+    depth: 15
+    });
+  }
+catch(e){
+  try{
+    await git.clone({
+    fs,
+    http,
+    dir,
+    corsProxy: 'https://cors.isomorphic-git.org',
+    url: repo,
+    ref: 'main',
+    singleBranch: true,
+    depth: 15
+    });
+  }
+  catch(e){ console.log(e);}
+
+}
+
+  var commits = await git.log({
+       fs, depth:15,
+       dir: dir     });
+
+   var node = [];
+   var edge = [];
+   var index_user = new Object();
+   var index_user_count = 0 ;
+   var group;
+   for (var i = 0; i < commits.length; i++) {
+     var user_name = commits[i]["commit"]["author"]["name"];
+     if (user_name in index_user ){
+       group = index_user[user_name];
+     }
+     else{
+       index_user[user_name] = index_user_count;
+       group = index_user[user_name];
+       index_user_count = index_user_count + 1 ;
+
+
+     }
+     node.push({"id":commits[i]["oid"],"label":user_name,"groups":group,"group":group});
+     for(var j = 0 ; j < commits[i]["commit"]["parent"].length; j++){
+       edge.push({"to":commits[i]["commit"]["parent"][j],"from":commits[i]["oid"]});
+     }
+   }
+   let data ={"nodes":node,"edges":edge};
+   return [data,index_user];
+}
+
+    window.addEventListener("load", function() {
+      document.getElementById('git_url_form').addEventListener("submit", function(e) {
+        e.preventDefault(); // before the code
+     f(e.target.git_url.value).then(datas =>{
+
+       var repo = e.target.git_url.value;
+       var data = datas[0];
+       var index_user = datas[1];
+       var chart = anychart.graph(data);
+
+     var user = document.getElementById("user_ex_id");
+      for (var i = 0; i < Object.keys(index_user).length; i++) {
+        var group = chart.group(i);
+        var new_user = user.cloneNode(true);
+        new_user.style.removeProperty('display');
+        new_user.style.color=anychart.palettes.defaultPalette[i];
+        new_user.getElementsByTagName("div")[0].style.fill = anychart.palettes.defaultPalette[i];
+        new_user.getElementsByTagName("div")[0].innerHTML = Object.keys(index_user)[i];
+         document.getElementById("left_div").appendChild(new_user);
+        group
+          .labels()
+          .enabled(true)
+          .anchor('left-center')
+          .position('right-center')
+          .padding(0, -5)
+          .fontColor(anychart.palettes.defaultPalette[i]);
+        group.stroke(anychart.palettes.defaultPalette[i]);
+        group.fill(anychart.palettes.defaultPalette[i]);
+      }
+
+       chart.title(repo);
+       chart.container("container").draw();
+
+})
+
+})
+});
+</script>
+</head>
+<body>
+
+  <a href="https://gitframed.com"> <img     src="/img/logo.jpg" id="gitframed_logo"
+ alt="gitframed logo" > </a>
+      <h1 id="title"> Monitor your git commits in your browser ! </h1>
+  <div class="topnav">
+
+  <div class="search-container">
+    <form id="git_url_form">
+      <input type="text" id = "git_url" placeholder="git URL" name="git_url">
+      <button id="btn" type="submit" >watch</button>
+    </form>
+  </div>
+
+</div>
+<div id="left_div">
+  <div id="user_ex_id" style="display:none;">
+  <div class="circle-with-text">
+    Here is some text in circle
+</div>
+</div>
+</div>
+<div id="right_div">
+  <h3> Made by <a href="https://gitframed.com"> Gitframed.com </a> </h2>
+  <h3 > Open source ==> <a href="https://github.com/gitframed/live-gitframed">Github </a> </h2>
+
+  <h3> Tools/framework used </h3>
+  <ul>
+      <li><a href="https://isomorphic-git.org/en/"> Isomorphic  </a></li>
+      <li><a href="https://www.anychart.com/"> Anychart </a> </li>
+  </ul>
+</div>
+  <div id="container" ></div>
+  </body>
+  </html>
